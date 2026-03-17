@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grafana Connection Manual</title>
+    <style>
+        body {
+            background-color: #121212;
+            color: #e0e0e0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        h1, h2, h3 {
+            color: #ffffff;
+            margin-top: 1.5em;
+        }
+        h1 {
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+            margin-top: 0;
+        }
+        h2 {
+            border-bottom: 1px solid #333;
+            padding-bottom: 8px;
+        }
+        h3 {
+            color: #cccccc;
+        }
+        p, li {
+            font-size: 1.05em;
+        }
+        ul, ol {
+            margin-bottom: 1.5em;
+        }
+        li {
+            margin-bottom: 0.5em;
+        }
+        hr {
+            border: 0;
+            height: 1px;
+            background: #444;
+            margin: 2em 0;
+        }
+        code {
+            font-family: ui-monospace, SFMono-Regular, Consolas, "Courier New", monospace;
+            background-color: #2a2a2a;
+            padding: 0.2em 0.4em;
+            border-radius: 4px;
+            font-size: 0.9em;
+            color: #ffb86c;
+        }
+        pre {
+            background-color: #1e1e1e;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            border: 1px solid #333;
+            margin: 1.5em 0;
+        }
+        pre code {
+            background-color: transparent;
+            padding: 0;
+            color: #e0e0e0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 2em 0;
+            background-color: #1e1e1e;
+        }
+        th, td {
+            border: 1px solid #444;
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #2c2c2c;
+            color: #ffffff;
+            font-weight: bold;
+        }
+        tr:nth-child(even) {
+            background-color: #252525;
+        }
+    </style>
+</head>
+<h2>⚖️ PART 5: GRAFANA VS. POWER BI VS. SSRS</h2>
+<body>
+    <table>
+        <thead>
+            <tr>
+                <th>Feature / Factor</th>
+                <th>Grafana<br><em>(The "Stopwatch")</em></th>
+                <th>Power BI<br><em>(The "Calculator")</em></th>
+                <th>SSRS<br><em>(The "Printing Press")</em></th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Primary Use Case</strong></td>
+                <td><strong>Live Monitoring:</strong> Factory floor TVs, NOCs, real-time alerts. Designed for operators to glance at and react to current conditions.</td>
+                <td><strong>Deep Analysis:</strong> Boardrooms, executive summaries, exploring historical trends. Designed to answer "why" things happened.</td>
+                <td><strong>Static Reporting:</strong> End-of-month PDF summaries, invoices, email bursts. Designed for paginated, printable documents.</td>
+            </tr>
+            <tr>
+                <td><strong>Interactivity</strong></td>
+                <td><strong>Low:</strong> Highly view-centric. Uses top-level drop-down variables to change the underlying SQL query for the whole board.</td>
+                <td><strong>High:</strong> Click a bar on a chart, and the map next to it cross-filters instantly. Built for deep drill-downs.</td>
+                <td><strong>Very Low:</strong> Mostly static. Users can set parameters before running the report, but cross-filtering isn't native.</td>
+            </tr>
+            <tr>
+                <td><strong>Data Sources</strong></td>
+                <td><strong>Targeted:</strong> Excels with single SQL databases or time-series DBs (Prometheus, InfluxDB).</td>
+                <td><strong>Massive Blender:</strong> Seamlessly merges SQL databases, Excel files, Web APIs, and SharePoint into one model.</td>
+                <td><strong>Native Microsoft:</strong> Built specifically to sit on top of Microsoft SQL Server (can use ODBC for others).</td>
+            </tr>
+            <tr>
+                <td><strong>Security &amp; Access</strong></td>
+                <td><strong>Complex:</strong> Hard to restrict data row-by-row per user without writing hacky SQL variables or duplicating dashboards.</td>
+                <td><strong>Robust:</strong> Native Row-Level Security (RLS) tied to Microsoft 365 accounts. One dashboard securely feeds 50 managers.</td>
+                <td><strong>Folder-based:</strong> Uses Windows Active Directory. Great for restricting access to reports, harder for row-level logic.</td>
+            </tr>
+            <tr>
+                <td><strong>The "Bus Factor" (Maintenance)</strong></td>
+                <td><strong>High Risk:</strong> Requires a developer or DBA who knows raw SQL and server maintenance to fix or add charts.</td>
+                <td><strong>Low Risk:</strong> Easy drag-and-drop interface. A junior business analyst can easily take over the `.pbix` file.</td>
+                <td><strong>Medium Risk:</strong> Requires knowledge of SQL, Report Builder, and older Microsoft enterprise concepts.</td>
+            </tr>
+            <tr>
+                <td><strong>Cost Profile</strong></td>
+                <td><strong>$0 Software:</strong> Open Source. Costs are limited to the physical hardware running it and IT maintenance time.</td>
+                <td><strong>Subscription:</strong> $14/user/mo (Pro limit) or thousands per month for Premium cloud capacity.</td>
+                <td><strong>"Free" with SQL:</strong> Included if the company already pays for expensive SQL Server Standard/Enterprise licenses.</td>
+            </tr>
+            <tr>
+                <td><strong>Refresh Rate</strong></td>
+                <td><strong>Real-Time:</strong> Sub-minute natively (e.g., every 5-10 seconds) because it's just firing lightweight text queries.</td>
+                <td><strong>Delayed/Heavy:</strong> 30-min delay on Pro. 1-min live requires a Premium server and heavy database optimization.</td>
+                <td><strong>On-Demand:</strong> Refreshes when a user opens it or clicks "Run." Not built for unattended auto-refreshing TVs.</td>
+            </tr>
+            <tr>
+                <td><strong>Infrastructure</strong></td>
+                <td><strong>100% Local:</strong> Can run on a small VM. No cloud gateways or outbound firewall rules required.</td>
+                <td><strong>Cloud-Dependent:</strong> Requires the On-premises Data Gateway and Azure Relay to push local data to the web.</td>
+                <td><strong>100% Local Enterprise:</strong> Usually installed directly onto the heavy, local SQL database server.</td>
+            </tr>
+        </tbody>
+    </table>
+</body>

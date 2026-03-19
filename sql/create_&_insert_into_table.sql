@@ -100,4 +100,7 @@ DELETE FROM machines
 ORDER BY machine_id DESC
 LIMIT 100;
 
-SELECT * from machines ORDER BY machine_id DESC
+SELECT * from machines ORDER BY machine_id DESC;
+
+select * from maintenance_logs;
+UPDATE machines SET status = 'Active' WHERE machine_id = 3;

@@ -1,0 +1,184 @@
+-- =============================================================
+-- reseed_30_days.sql
+-- Full teardown and 30-day reseed for grafana_demo.
+--
+-- Run this once before any demo to ensure all timestamps
+-- are fresh and Grafana's "last 30 min / 24h / 7d / 30d"
+-- time windows all return real data.
+--
+-- Usage:  SOURCE /path/to/reseed_30_days.sql;
+--         (or paste into TablePlus / VS Code MySQL extension)
+-- =============================================================
+
+USE grafana_demo;
+
+-- MySQL's recursive CTE default depth is 1000.
+-- sensor_data needs 4,320 steps (30 days @ 10-min intervals).
+-- We raise the limit for this session only.
+SET SESSION cte_max_recursion_depth = 5000;
+
+
+-- =============================================================
+-- STEP 1: DROP ALL CHILD TABLES (foreign keys first)
+-- =============================================================
+DROP TABLE IF EXISTS sensor_data;
+DROP TABLE IF EXISTS production_metrics;
+DROP TABLE IF EXISTS energy_consumption;
+DROP TABLE IF EXISTS maintenance_logs;
+
+
+-- =============================================================
+-- STEP 2: RESET MACHINES TO THE CLEAN 5-MACHINE SET
+-- =============================================================
+DELETE FROM machines WHERE machine_id > 5;
+
+-- Confirm the 5 core machines exist (safe to re-run)
+INSERT IGNORE INTO machines (machine_id, machine_name, production_line, status) VALUES
+(1, 'Press A1',    'Line 1', 'Active'),
+(2, 'Press A2',    'Line 1', 'Active'),
+(3, 'Welder B1',   'Line 2', 'Active'),
+(4, 'Welder B2',   'Line 2', 'Active'),
+(5, 'Packager C1', 'Line 3', 'Active');
+
+
+-- =============================================================
+-- STEP 3: RECREATE ALL CHILD TABLES
+-- =============================================================
+
+CREATE TABLE production_metrics (
+    id           INT AUTO_INCREMENT PRIMARY KEY,
+    machine_id   INT,
+    recorded_at  DATETIME,
+    units_produced INT,
+    defects      INT,
+    FOREIGN KEY (machine_id) REFERENCES machines(machine_id)
+);
+
+CREATE TABLE sensor_data (
+    id                  INT AUTO_INCREMENT PRIMARY KEY,
+    machine_id          INT,
+    recorded_at         DATETIME,
+    temperature_celsius DECIMAL(5,2),
+    vibration_hz        DECIMAL(5,2),
+    FOREIGN KEY (machine_id) REFERENCES machines(machine_id)
+);
+
+CREATE TABLE energy_consumption (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    machine_id  INT,
+    recorded_at DATETIME,
+    kwh_used    DECIMAL(6,2),
+    FOREIGN KEY (machine_id) REFERENCES machines(machine_id)
+);
+
+CREATE TABLE maintenance_logs (
+    id               INT AUTO_INCREMENT PRIMARY KEY,
+    machine_id       INT,
+    logged_at        DATETIME,
+    issue_type       VARCHAR(50),
+    downtime_minutes INT,
+    FOREIGN KEY (machine_id) REFERENCES machines(machine_id)
+);
+
+
+-- =============================================================
+-- STEP 4: SEED production_metrics
+--   • 1 row per hour per machine over 30 days
+--   • 30d × 24h = 720 hourly intervals
+--   • (n % 5) + 1 cycles cleanly through machine IDs 1–5
+--   • Total rows: 720
+-- =============================================================
+INSERT INTO production_metrics (machine_id, recorded_at, units_produced, defects)
+WITH RECURSIVE time_gen AS (
+    SELECT 1 AS n, DATE_SUB(NOW(), INTERVAL 720 HOUR) AS t
+    UNION ALL
+    SELECT n + 1, DATE_ADD(t, INTERVAL 1 HOUR)
+    FROM time_gen WHERE n < 720
+)
+SELECT
+    (n % 5) + 1                    AS machine_id,
+    t                              AS recorded_at,
+    FLOOR(120 + (RAND() * 80))     AS units_produced,   -- 120–200 units/hr
+    FLOOR(RAND() * 12)             AS defects            -- 0–11 defects/hr
+FROM time_gen;
+
+
+-- =============================================================
+-- STEP 5: SEED sensor_data
+--   • 1 row per 10 minutes per machine over 30 days
+--   • 30d × 24h × 6 = 4,320 intervals  (needs depth = 5000)
+--   • Total rows: 4,320
+-- =============================================================
+INSERT INTO sensor_data (machine_id, recorded_at, temperature_celsius, vibration_hz)
+WITH RECURSIVE time_gen AS (
+    SELECT 1 AS n, DATE_SUB(NOW(), INTERVAL 4320 * 10 MINUTE) AS t
+    UNION ALL
+    SELECT n + 1, DATE_ADD(t, INTERVAL 10 MINUTE)
+    FROM time_gen WHERE n < 4320
+)
+SELECT
+    (n % 5) + 1                        AS machine_id,
+    t                                  AS recorded_at,
+    ROUND(60 + (RAND() * 30), 2)       AS temperature_celsius,  -- 60–90 °C
+    ROUND(5  + (RAND() * 10), 2)       AS vibration_hz           -- 5–15 Hz
+FROM time_gen;
+
+
+-- =============================================================
+-- STEP 6: SEED energy_consumption
+--   • Mirrors production_metrics cadence (1 row/hour over 30d)
+--   • Total rows: 720
+-- =============================================================
+INSERT INTO energy_consumption (machine_id, recorded_at, kwh_used)
+WITH RECURSIVE time_gen AS (
+    SELECT 1 AS n, DATE_SUB(NOW(), INTERVAL 720 HOUR) AS t
+    UNION ALL
+    SELECT n + 1, DATE_ADD(t, INTERVAL 1 HOUR)
+    FROM time_gen WHERE n < 720
+)
+SELECT
+    (n % 5) + 1                   AS machine_id,
+    t                             AS recorded_at,
+    ROUND(15 + (RAND() * 10), 2)  AS kwh_used   -- 15–25 kWh/hr
+FROM time_gen;
+
+
+-- =============================================================
+-- STEP 7: SEED maintenance_logs
+--   • 1 event per day over 30 days (realistic cadence)
+--   • Cycles through all 5 machines
+--   • Total rows: 30
+-- =============================================================
+INSERT INTO maintenance_logs (machine_id, logged_at, issue_type, downtime_minutes)
+WITH RECURSIVE time_gen AS (
+    SELECT 1 AS n, DATE_SUB(NOW(), INTERVAL 30 DAY) AS t
+    UNION ALL
+    SELECT n + 1, DATE_ADD(t, INTERVAL 1 DAY)
+    FROM time_gen WHERE n < 30
+)
+SELECT
+    (n % 5) + 1  AS machine_id,
+    t            AS logged_at,
+    ELT(
+        FLOOR(1 + (RAND() * 4)),
+        'Overheating',
+        'Calibration',
+        'Part Replacement',
+        'Routine Inspection'
+    )            AS issue_type,
+    FLOOR(15 + (RAND() * 105))  AS downtime_minutes  -- 15–120 min
+FROM time_gen;
+
+
+-- =============================================================
+-- STEP 8: SANITY CHECK — print row counts for all 5 tables
+-- =============================================================
+SELECT 'machines' AS `table`, COUNT(*) AS 'Row Count' FROM machines
+UNION ALL
+SELECT 'production_metrics', COUNT(*) FROM production_metrics
+UNION ALL
+SELECT 'sensor_data', COUNT(*) FROM sensor_data
+UNION ALL
+SELECT 'energy_consumption', COUNT(*) FROM energy_consumption
+UNION ALL
+SELECT 'maintenance_logs', COUNT(*) FROM maintenance_logs;
